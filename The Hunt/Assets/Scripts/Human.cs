@@ -159,11 +159,13 @@ public class Human : MonoBehaviour
         CurrentState = HumanState.Dead;
 
         Agent.enabled = false;
+        CapsuleCollider.enabled = false;
 
         Ragdoll.SetRagdoll(true);
 
-        this.enabled = false;
-        CapsuleCollider.enabled = false;
+        GetComponent<BodyDragInteractable>().enabled = true;
+
+        enabled = false;
     }
 
 }
