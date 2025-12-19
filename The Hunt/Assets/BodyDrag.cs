@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class BodyDrag : MonoBehaviour
 {
@@ -15,8 +15,9 @@ public class BodyDrag : MonoBehaviour
 
     [Header("Blood Trail Settings")]
     public GameObject BloodDecalPrefab;
-    public float BloodSpawnInterval = 0.3f; // seconds
-    public float BloodHeightOffset = 0.05f; // height above ground
+    public float BloodSpawnInterval = 0.3f;
+    public float BloodHeightOffset = 0.02f;
+    public float MinMovementForBlood = 0.1f;   // 🔹 NEW
 
     [Header("References")]
     public PlayerMovement Movement;
@@ -32,9 +33,9 @@ public class BodyDrag : MonoBehaviour
 
     Rigidbody carryRB;
 
-    // Blood trail logic
     float bloodTimer;
-
+    Vector3 lastBloodPos;                       // 🔹 NEW
+    public BloodTrailEmitter BloodTrail;
     void Awake()
     {
         if (CarryPoint != null)
@@ -60,29 +61,47 @@ public class BodyDrag : MonoBehaviour
 
         dragAnchor.AddForce(dir * FollowForce * Time.fixedDeltaTime, ForceMode.Acceleration);
 
-        // Blood decal spawning
+        // Blood logic
         bloodTimer += Time.fixedDeltaTime;
         if (bloodTimer >= BloodSpawnInterval)
         {
-            SpawnBloodDecal();
+            TrySpawnBlood();
             bloodTimer = 0f;
         }
     }
 
-    void SpawnBloodDecal()
+    // =========================
+    // BLOOD LOGIC
+    // =========================
+    void TrySpawnBlood()
     {
         if (BloodDecalPrefab == null || dragAnchor == null)
             return;
 
-        // Raycast to find ground under the body
-        if (Physics.Raycast(dragAnchor.position + Vector3.up, Vector3.down, out RaycastHit hit, 2f))
+        Vector3 footPos = dragAnchor.position + Vector3.down * 0.4f;
+
+        if (Vector3.Distance(footPos, lastBloodPos) < MinMovementForBlood)
+            return;
+
+        lastBloodPos = footPos;
+
+        if (Physics.Raycast(footPos + Vector3.up, Vector3.down, out RaycastHit hit, 1.5f))
         {
             Vector3 spawnPos = hit.point + Vector3.up * BloodHeightOffset;
-            Quaternion spawnRot = Quaternion.FromToRotation(Vector3.up, hit.normal);
-            Instantiate(BloodDecalPrefab, spawnPos, spawnRot);
+
+            Quaternion rot = Quaternion.FromToRotation(Vector3.up, hit.normal);
+            rot *= Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+
+            GameObject decal = Instantiate(BloodDecalPrefab, spawnPos, CarryPoint.rotation);
+
+            float scale = Random.Range(0.15f, 0.35f);
+            decal.transform.localScale = Vector3.one * scale;
         }
     }
 
+    // =========================
+    // DRAG CONTROL
+    // =========================
     public void StartDragging(Rigidbody anchor)
     {
         if (isDragging || anchor == null)
@@ -91,10 +110,11 @@ public class BodyDrag : MonoBehaviour
         dragAnchor = anchor;
         dragAnchor.WakeUp();
 
-        ApplyCarryPenalties();
+        lastBloodPos = dragAnchor.position;
+        bloodTimer = 0f;
 
+        ApplyCarryPenalties();
         isDragging = true;
-        bloodTimer = 0f; // reset timer
     }
 
     public void StopDragging()
@@ -107,6 +127,9 @@ public class BodyDrag : MonoBehaviour
         isDragging = false;
     }
 
+    // =========================
+    // PENALTIES
+    // =========================
     void ApplyCarryPenalties()
     {
         if (penaltiesApplied || Movement == null || Look == null) return;
